@@ -1,14 +1,27 @@
+#define NOMINMAX
+
 #include <windows.h>
 #include <windowsx.h>
 
 #include <dwmapi.h>
 #pragma comment(lib, "dwmapi.lib")
 
+#include <algorithm>
+#include <math.h>
+
 // Draw content to a DIB, then use UpdateLayeredWindow
 // Alpha = 0 (transparent) for background, 255 (opaque) for drawn items
 
 HWND g_hwnd = NULL;
 
+DWORD makeRGBA(float fr, float fg, float fb, float fa)
+{
+    BYTE r = std::clamp(fr * 256.f, 0.f, 255.f);
+    BYTE g = std::clamp(fg * 256.f, 0.f, 255.f);
+    BYTE b = std::clamp(fb * 256.f, 0.f, 255.f);
+    BYTE a = std::clamp(fa * 256.f, 0.f, 255.f);
+    return (a << 24) | ((r * a / 255) << 16) | ((g * a / 255) << 8) | ((b * a / 255));
+}
 void UpdateWindow(HWND hwnd, int width, int height)
 {
     HDC hdcScreen = GetDC(NULL);
@@ -30,16 +43,48 @@ void UpdateWindow(HWND hwnd, int width, int height)
     HBITMAP hbm = CreateDIBSection(hdcScreen, &bi, DIB_RGB_COLORS, &pvBits, NULL, 0);
     HBITMAP hOld = (HBITMAP)SelectObject(hdcMem, hbm);
 
-    BYTE bgAlpha = 120;
-    DWORD bgColor = (bgAlpha << 24) // A
-        | ((0 * bgAlpha / 255) << 16) // R
-        | ((0 * bgAlpha / 255) << 8) // G
-        | ((200 * bgAlpha / 255)); // B
+    DWORD bgColor = makeRGBA(1, 1, 1, 1);
 
     int numPixels = width * height;
     DWORD* pixels = (DWORD*)pvBits;
-    for (int i = 0; i < numPixels; i++)
-        pixels[i] = bgColor;
+    for (int y = 0; y < height; y++)
+        for (int x = 0; x < width; x++)
+            pixels[y * width + x] = bgColor;
+
+    auto makeDist = [](float x, float y, float r) {
+        x = r - x, y = r - y;
+        return r - sqrt(x * x + y * y);
+    };
+
+    // const float r = std::min(16, std::min(width / 2, height / 2));
+    const int r = 100;
+    int minrx = std::min(r, (width + 1) / 2);
+    int minry = std::min(r, (height + 1) / 2);
+
+
+    for (int y = 0; y < minry; y++)
+        for (int x = 0; x < minrx; x++) {
+            float dist = makeDist(x, y, r);
+            pixels[y * width + x] = makeRGBA(1, 1, 1, dist + 1);
+        }
+
+    for (int y = 0; y < minry; y++)
+        for (int x = width - minrx; x < width; x++) {
+            float dist = makeDist(width - x - 1, y, r);
+            pixels[y * width + x] = makeRGBA(1, 1, 1, dist + 1);
+        }
+
+    for (int y = height - minry; y < height; y++)
+        for (int x = 0; x < minrx; x++) {
+            float dist = makeDist(x, height - y - 1, r);
+            pixels[y * width + x] = makeRGBA(1, 1, 1, dist + 1);
+        }
+
+    for (int y = height - minry; y < height; y++)
+        for (int x = width - minrx; x < width; x++) {
+            float dist = makeDist(width - x - 1, height - y - 1, r);
+            pixels[y * width + x] = makeRGBA(1, 1, 1, dist + 1);
+        }
 
     RECT rc = { 50, 50, 250, 150 };
     for (int y = rc.top; y < rc.bottom; y++)
@@ -158,7 +203,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int)
     HWND hwnd = CreateWindowEx(
         WS_EX_LAYERED | WS_EX_TOPMOST, // layered + always on top
         L"LayeredWnd", L"",
-        WS_OVERLAPPEDWINDOW, // no title bar/border
+        WS_POPUP, // no title bar/border
         300, 200, 400, 300,
         NULL, NULL, hInst, NULL);
 
