@@ -22,6 +22,101 @@ DWORD makeRGBA(float fr, float fg, float fb, float fa)
     BYTE a = (BYTE)std::clamp(fa * 256.f, 0.f, 255.f);
     return (a << 24) | ((r * a / 255) << 16) | ((g * a / 255) << 8) | ((b * a / 255));
 }
+
+struct Canvas {
+    DWORD* pixels;
+    LONG w, h;
+};
+
+void drawBorderedRect(const Canvas canvas)
+{
+    const float bgMag = 0.2f;
+    const float borderMag = 0.6f;
+    const float alpha = 0.8f;
+    const int r = 16;
+    const int bw = 2;
+
+    const int rw = canvas.w;
+    const int rh = canvas.h;
+
+    DWORD bgColor = makeRGBA(bgMag, bgMag, bgMag, alpha);
+    DWORD borderColor = makeRGBA(borderMag, borderMag, borderMag, alpha);
+
+    DWORD* pixels = canvas.pixels;
+
+    int rw_r = rw - r;
+    int rw_bw = rw - bw;
+    int rh_bw = rh - bw;
+    int rh_r = rh - r;
+
+    for (int y = 0; y < bw; y++) // top border
+        for (int x = r; x < rw_r; x++)
+            pixels[y * rw + x] = borderColor;
+
+    for (int y = bw; y < r; y++) // top background
+        for (int x = r; x < rw_r; x++)
+            pixels[y * rw + x] = bgColor;
+
+    for (int y = r; y < rh_r; y++) // mid section
+        for (int x = bw; x < rw_bw; x++)
+            pixels[y * rw + x] = bgColor;
+
+    for (int y = rh_r; y < rh_bw; y++) // bottom background
+        for (int x = r; x < rw_r; x++)
+            pixels[y * rw + x] = bgColor;
+
+    for (int y = rh_bw; y < rh; y++) // bottom border
+        for (int x = r; x < rw_r; x++)
+            pixels[y * rw + x] = borderColor;
+
+    for (int y = r; y < rh_r; y++) // left border
+        for (int x = 0; x < bw; x++)
+            pixels[y * rw + x] = borderColor;
+
+    for (int y = r; y < rh_r; y++) // right border
+        for (int x = rw_bw; x < rw; x++)
+            pixels[y * rw + x] = borderColor;
+
+    auto makeDist = [](int x, int y, int r) {
+        float fx = float(r - x), fy = float(r - y);
+        return r - sqrtf(fx * fx + fy * fy);
+    };
+
+    auto makeColor = [&](float dist) {
+        dist += 1;
+        float mag = borderMag - std::clamp(dist - bw, 0.f, 1.f) * (borderMag - bgMag);
+        return makeRGBA(mag, mag, mag, std::clamp(dist, 0.f, 1.f) * alpha);
+    };
+
+    // const float r = std::min(16, std::min(width / 2, height / 2));
+    int minrx = std::min(r, (rw + 1) / 2);
+    int minry = std::min(r, (rh + 1) / 2);
+
+    for (int y = 0; y < minry; y++)
+        for (int x = 0; x < minrx; x++) {
+            float dist = makeDist(x, y, r);
+            pixels[y * rw + x] = makeColor(dist);
+        }
+
+    for (int y = 0; y < minry; y++)
+        for (int x = rw - minrx; x < rw; x++) {
+            float dist = makeDist(rw - x - 1, y, r);
+            pixels[y * rw + x] = makeColor(dist);
+        }
+
+    for (int y = rh - minry; y < rh; y++)
+        for (int x = 0; x < minrx; x++) {
+            float dist = makeDist(x, rh - y - 1, r);
+            pixels[y * rw + x] = makeColor(dist);
+        }
+
+    for (int y = rh - minry; y < rh; y++)
+        for (int x = rw - minrx; x < rw; x++) {
+            float dist = makeDist(rw - x - 1, rh - y - 1, r);
+            pixels[y * rw + x] = makeColor(dist);
+        }
+}
+
 void UpdateWindow(HWND hwnd, int width, int height)
 {
     HDC hdcScreen = GetDC(NULL);
@@ -43,79 +138,9 @@ void UpdateWindow(HWND hwnd, int width, int height)
     HBITMAP hbm = CreateDIBSection(hdcScreen, &bi, DIB_RGB_COLORS, &pvBits, NULL, 0);
     HBITMAP hOld = (HBITMAP)SelectObject(hdcMem, hbm);
 
-    float bgMag = 0.2f;
-    float borderMag = 0.6f;
-    float alpha = 0.8f;
-    const int r = 16;
-    const int borderSize = 2;
+    Canvas canvas { (DWORD*)pvBits, width, height };
 
-    DWORD bgColor = makeRGBA(bgMag, bgMag, bgMag, alpha);
-    DWORD borderColor = makeRGBA(borderMag, borderMag, borderMag, alpha);
-
-    int numPixels = width * height;
-    DWORD* pixels = (DWORD*)pvBits;
-
-    for (int i = 0; i < numPixels; i++)
-        pixels[i] = bgColor;
-
-    for (int y = 0; y < std::min(height, borderSize); y++) // top
-        for (int x = 0; x < width; x++)
-            pixels[y * width + x] = borderColor;
-
-    for (int y = std::max(0, height - borderSize); y < height; y++) // bottom
-        for (int x = 0; x < width; x++)
-            pixels[y * width + x] = borderColor;
-
-    for (int y = 0; y < height; y++) // left
-        for (int x = 0; x < std::min(width, borderSize); x++)
-            pixels[y * width + x] = borderColor;
-
-    for (int y = 0; y < height; y++) // right
-        for (int x = std::max(0, width - borderSize); x < width; x++)
-            pixels[y * width + x] = borderColor;
-
-    auto makeDist = [](int x, int y, int r) { float fx = float(r - x), fy = float(r - y); return r - sqrtf(fx * fx + fy * fy); };
-    auto makeColor = [&](float dist) {
-        dist += 1;
-        float mag = borderMag - std::clamp(dist - borderSize, 0.f, 1.f) * (borderMag - bgMag);
-        return makeRGBA(mag, mag, mag, std::clamp(dist, 0.f, 1.f) * alpha);
-    };
-
-    // const float r = std::min(16, std::min(width / 2, height / 2));
-    int minrx = std::min(r, (width + 1) / 2);
-    int minry = std::min(r, (height + 1) / 2);
-
-    for (int y = 0; y < minry; y++)
-        for (int x = 0; x < minrx; x++) {
-            float dist = makeDist(x, y, r);
-            pixels[y * width + x] = makeColor(dist);
-        }
-
-    for (int y = 0; y < minry; y++)
-        for (int x = width - minrx; x < width; x++) {
-            float dist = makeDist(width - x - 1, y, r);
-            pixels[y * width + x] = makeColor(dist);
-        }
-
-    for (int y = height - minry; y < height; y++)
-        for (int x = 0; x < minrx; x++) {
-            float dist = makeDist(x, height - y - 1, r);
-            pixels[y * width + x] = makeColor(dist);
-        }
-
-    for (int y = height - minry; y < height; y++)
-        for (int x = width - minrx; x < width; x++) {
-            float dist = makeDist(width - x - 1, height - y - 1, r);
-            pixels[y * width + x] = makeColor(dist);
-        }
-
-    RECT rc = { 50, 50, 250, 150 };
-    for (int y = rc.top; y < rc.bottom; y++)
-        for (int x = rc.left; x < rc.right; x++) {
-            int index = y * width + x;
-            if (index < numPixels)
-                pixels[y * width + x] = 0xFF'FF'00'00;
-        }
+    drawBorderedRect(canvas);
 
     BLENDFUNCTION blend = {};
     blend.BlendOp = AC_SRC_OVER;
