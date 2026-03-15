@@ -13,14 +13,42 @@
 // Alpha = 0 (transparent) for background, 255 (opaque) for drawn items
 
 HWND g_hwnd = NULL;
+#define RGBA(r, g, b, a) ((DWORD)(((b) | ((WORD)(g) << 8)) | (((DWORD)(r)) << 16) | (((DWORD)(a)) << 24)))
 
-DWORD makeRGBA(float fr, float fg, float fb, float fa)
+void AlphaComposite(DWORD& back, DWORD front)
 {
-    BYTE r = (BYTE)std::clamp(fr * 256.f, 0.f, 255.f);
-    BYTE g = (BYTE)std::clamp(fg * 256.f, 0.f, 255.f);
-    BYTE b = (BYTE)std::clamp(fb * 256.f, 0.f, 255.f);
-    BYTE a = (BYTE)std::clamp(fa * 256.f, 0.f, 255.f);
-    return (a << 24) | ((r * a / 255) << 16) | ((g * a / 255) << 8) | ((b * a / 255));
+    // Extract Alpha, Red, Green, Blue
+    float fa = (front >> 24) & 0xFF, fr = (front >> 16) & 0xFF, fg = (front >> 8) & 0xFF, fb = (front) & 0xFF;
+    float ba = (back >> 24) & 0xFF, br = (back >> 16) & 0xFF, bg = (back >> 8) & 0xFF, bb = (back) & 0xFF;
+
+    if (fa == 255) {
+        back = front;
+        return;
+    }
+    if (fa == 0)
+        return;
+
+    float inv_af = 255 - fa;
+    back = (DWORD(fa + (ba * inv_af) / 255.f) << 24)
+        | (DWORD((fr * fa + br * inv_af) / 255.f) << 16)
+        | (DWORD((fg * fa + bg * inv_af) / 255.f) << 8)
+        | DWORD((fb * fa + bb * inv_af) / 255.f);
+}
+
+DWORD LerpColor(DWORD colorA, DWORD colorB, float t)
+{
+    t = (t < 0.0f) ? 0.0f : (t > 1.0f ? 1.0f : t);
+    if (t == 0)
+        return colorA;
+    if (t == 1)
+        return colorB;
+
+    float a1 = (colorA >> 24) & 0xff, r1 = (colorA >> 16) & 0xff, g1 = (colorA >> 8) & 0xff, b1 = (colorA) & 0xff;
+    float a2 = (colorB >> 24) & 0xff, r2 = (colorB >> 16) & 0xff, g2 = (colorB >> 8) & 0xff, b2 = (colorB) & 0xff;
+    return (DWORD(a1 + t * (a2 - a1)) << 24)
+        | (DWORD(r1 + t * (r2 - r1)) << 16)
+        | (DWORD(g1 + t * (g2 - g1)) << 8)
+        | DWORD(b1 + t * (b2 - b1));
 }
 
 struct Canvas {
@@ -30,26 +58,10 @@ struct Canvas {
 
 void drawBorderedRect(const Canvas canvas, const RECT rc)
 {
-
-    const float bgMag = 0.2f;
-    const float borderMag = 0.6f;
-    const float alpha = 0.8f;
+    DWORD bgColor = RGBA(40, 40, 40, 160);
+    DWORD borderColor = RGBA(200, 200, 200, 160);
     const int r = 16;
     const int bw = 2;
-
-    DWORD bgColor = makeRGBA(bgMag, bgMag, bgMag, alpha);
-    DWORD borderColor = makeRGBA(borderMag, borderMag, borderMag, alpha);
-
-    auto makeDist = [](int x, int y, int r) {
-        float fx = float(r - x), fy = float(r - y);
-        return r - sqrtf(fx * fx + fy * fy);
-    };
-
-    auto makeColor = [&](float dist) {
-        dist += 1;
-        float mag = borderMag - std::clamp(dist - bw, 0.f, 1.f) * (borderMag - bgMag);
-        return makeRGBA(mag, mag, mag, std::clamp(dist, 0.f, 1.f) * alpha);
-    };
 
     DWORD* pixels = canvas.pixels;
 
@@ -68,31 +80,49 @@ void drawBorderedRect(const Canvas canvas, const RECT rc)
 
     for (int y = rct + 0; y < rct + bw; y++) // top border
         for (int x = rcl_r; x < rcw_r; x++)
-            pixels[y * canvas.w + x] = borderColor;
+            AlphaComposite(pixels[y * canvas.w + x], borderColor);
 
     for (int y = rct + bw; y < rct_r; y++) // top background
         for (int x = rcl_r; x < rcw_r; x++)
-            pixels[y * canvas.w + x] = bgColor;
+            AlphaComposite(pixels[y * canvas.w + x], bgColor);
 
     for (int y = rct_r; y < rch_r; y++) // mid section
         for (int x = rcl + bw; x < rcw_bw; x++)
-            pixels[y * canvas.w + x] = bgColor;
+            AlphaComposite(pixels[y * canvas.w + x], bgColor);
 
     for (int y = rch_r; y < rch_bw; y++) // bottom background
         for (int x = rcl_r; x < rcw_r; x++)
-            pixels[y * canvas.w + x] = bgColor;
+            AlphaComposite(pixels[y * canvas.w + x], bgColor);
 
     for (int y = rch_bw; y < rct + rch; y++) // bottom border
         for (int x = rcl_r; x < rcw_r; x++)
-            pixels[y * canvas.w + x] = borderColor;
+            AlphaComposite(pixels[y * canvas.w + x], borderColor);
 
     for (int y = rct_r; y < rch_r; y++) // left border
         for (int x = rcl + 0; x < rcl + bw; x++)
-            pixels[y * canvas.w + x] = borderColor;
+            AlphaComposite(pixels[y * canvas.w + x], borderColor);
 
     for (int y = rct_r; y < rch_r; y++) // right border
         for (int x = rcw_bw; x < rcl + rcw; x++)
-            pixels[y * canvas.w + x] = borderColor;
+            AlphaComposite(pixels[y * canvas.w + x], borderColor);
+
+    // corners
+    auto makeDist = [](int x, int y, int r) {
+        float fx = float(r - x), fy = float(r - y);
+        return r - sqrtf(fx * fx + fy * fy);
+    };
+
+    auto makeColor = [&](float dist) {
+        union {
+            DWORD col;
+            uint8_t rgba[4];
+        };
+        dist += 1;
+        col = LerpColor(borderColor, bgColor, dist - bw);
+        dist = std::clamp(dist, 0.f, 1.f);
+        rgba[0] *= dist, rgba[1] *= dist, rgba[2] *= dist, rgba[3] *= dist;
+        return col;
+    };
 
     int minrx = std::min(r, (rcw + 1) / 2);
     int minry = std::min(r, (rch + 1) / 2);
@@ -100,25 +130,25 @@ void drawBorderedRect(const Canvas canvas, const RECT rc)
     for (int y = rct + 0; y < rct + minry; y++) // top left
         for (int x = rcl; x < rcl + minrx; x++) {
             float dist = makeDist(x - rcl, y - rct, r);
-            pixels[y * canvas.w + x] = makeColor(dist);
+            AlphaComposite(pixels[y * canvas.w + x], makeColor(dist));
         }
 
     for (int y = rct; y < rct + minry; y++) // top right
         for (int x = rcl + rcw - minrx; x < rcl + rcw; x++) {
             float dist = makeDist(rcw - x - 1 + rcl, y - rct, r);
-            pixels[y * canvas.w + x] = makeColor(dist);
+            AlphaComposite(pixels[y * canvas.w + x], makeColor(dist));
         }
 
     for (int y = rct + rch - minry; y < rct + rch; y++)
         for (int x = rcl + 0; x < rcl + minrx; x++) {
             float dist = makeDist(x - rcl, rch - y - 1 + rct, r);
-            pixels[y * canvas.w + x] = makeColor(dist);
+            AlphaComposite(pixels[y * canvas.w + x], makeColor(dist));
         }
 
     for (int y = rct + rch - minry; y < rct + rch; y++)
         for (int x = rcl + rcw - minrx; x < rcl + rcw; x++) {
             float dist = makeDist(rcw - x - 1 + rcl, rch - y - 1 + rct, r);
-            pixels[y * canvas.w + x] = makeColor(dist);
+            AlphaComposite(pixels[y * canvas.w + x], makeColor(dist));
         }
 }
 
