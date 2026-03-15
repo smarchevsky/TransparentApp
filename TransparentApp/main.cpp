@@ -16,10 +16,10 @@ HWND g_hwnd = NULL;
 
 DWORD makeRGBA(float fr, float fg, float fb, float fa)
 {
-    BYTE r = std::clamp(fr * 256.f, 0.f, 255.f);
-    BYTE g = std::clamp(fg * 256.f, 0.f, 255.f);
-    BYTE b = std::clamp(fb * 256.f, 0.f, 255.f);
-    BYTE a = std::clamp(fa * 256.f, 0.f, 255.f);
+    BYTE r = (BYTE)std::clamp(fr * 256.f, 0.f, 255.f);
+    BYTE g = (BYTE)std::clamp(fg * 256.f, 0.f, 255.f);
+    BYTE b = (BYTE)std::clamp(fb * 256.f, 0.f, 255.f);
+    BYTE a = (BYTE)std::clamp(fa * 256.f, 0.f, 255.f);
     return (a << 24) | ((r * a / 255) << 16) | ((g * a / 255) << 8) | ((b * a / 255));
 }
 void UpdateWindow(HWND hwnd, int width, int height)
@@ -43,47 +43,70 @@ void UpdateWindow(HWND hwnd, int width, int height)
     HBITMAP hbm = CreateDIBSection(hdcScreen, &bi, DIB_RGB_COLORS, &pvBits, NULL, 0);
     HBITMAP hOld = (HBITMAP)SelectObject(hdcMem, hbm);
 
-    DWORD bgColor = makeRGBA(1, 1, 1, 1);
+    float bgMag = 0.2f;
+    float borderMag = 0.6f;
+    float alpha = 0.8f;
+    const int r = 16;
+    const int borderSize = 2;
+
+    DWORD bgColor = makeRGBA(bgMag, bgMag, bgMag, alpha);
+    DWORD borderColor = makeRGBA(borderMag, borderMag, borderMag, alpha);
 
     int numPixels = width * height;
     DWORD* pixels = (DWORD*)pvBits;
-    for (int y = 0; y < height; y++)
-        for (int x = 0; x < width; x++)
-            pixels[y * width + x] = bgColor;
 
-    auto makeDist = [](float x, float y, float r) {
-        x = r - x, y = r - y;
-        return r - sqrt(x * x + y * y);
+    for (int i = 0; i < numPixels; i++)
+        pixels[i] = bgColor;
+
+    for (int y = 0; y < std::min(height, borderSize); y++) // top
+        for (int x = 0; x < width; x++)
+            pixels[y * width + x] = borderColor;
+
+    for (int y = std::max(0, height - borderSize); y < height; y++) // bottom
+        for (int x = 0; x < width; x++)
+            pixels[y * width + x] = borderColor;
+
+    for (int y = 0; y < height; y++) // left
+        for (int x = 0; x < std::min(width, borderSize); x++)
+            pixels[y * width + x] = borderColor;
+
+    for (int y = 0; y < height; y++) // right
+        for (int x = std::max(0, width - borderSize); x < width; x++)
+            pixels[y * width + x] = borderColor;
+
+    auto makeDist = [](int x, int y, int r) { float fx = float(r - x), fy = float(r - y); return r - sqrtf(fx * fx + fy * fy); };
+    auto makeColor = [&](float dist) {
+        dist += 1;
+        float mag = borderMag - std::clamp(dist - borderSize, 0.f, 1.f) * (borderMag - bgMag);
+        return makeRGBA(mag, mag, mag, std::clamp(dist, 0.f, 1.f) * alpha);
     };
 
     // const float r = std::min(16, std::min(width / 2, height / 2));
-    const int r = 100;
     int minrx = std::min(r, (width + 1) / 2);
     int minry = std::min(r, (height + 1) / 2);
-
 
     for (int y = 0; y < minry; y++)
         for (int x = 0; x < minrx; x++) {
             float dist = makeDist(x, y, r);
-            pixels[y * width + x] = makeRGBA(1, 1, 1, dist + 1);
+            pixels[y * width + x] = makeColor(dist);
         }
 
     for (int y = 0; y < minry; y++)
         for (int x = width - minrx; x < width; x++) {
             float dist = makeDist(width - x - 1, y, r);
-            pixels[y * width + x] = makeRGBA(1, 1, 1, dist + 1);
+            pixels[y * width + x] = makeColor(dist);
         }
 
     for (int y = height - minry; y < height; y++)
         for (int x = 0; x < minrx; x++) {
             float dist = makeDist(x, height - y - 1, r);
-            pixels[y * width + x] = makeRGBA(1, 1, 1, dist + 1);
+            pixels[y * width + x] = makeColor(dist);
         }
 
     for (int y = height - minry; y < height; y++)
         for (int x = width - minrx; x < width; x++) {
             float dist = makeDist(width - x - 1, height - y - 1, r);
-            pixels[y * width + x] = makeRGBA(1, 1, 1, dist + 1);
+            pixels[y * width + x] = makeColor(dist);
         }
 
     RECT rc = { 50, 50, 250, 150 };
