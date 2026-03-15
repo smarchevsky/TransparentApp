@@ -36,46 +36,46 @@ void drawBorderedRect(const Canvas canvas)
     const int r = 16;
     const int bw = 2;
 
-    const int rw = canvas.w;
-    const int rh = canvas.h;
+    const int rcr = canvas.w; // right
+    const int rcb = canvas.h; // bottom
 
     DWORD bgColor = makeRGBA(bgMag, bgMag, bgMag, alpha);
     DWORD borderColor = makeRGBA(borderMag, borderMag, borderMag, alpha);
 
     DWORD* pixels = canvas.pixels;
 
-    int rw_r = rw - r;
-    int rw_bw = rw - bw;
-    int rh_bw = rh - bw;
-    int rh_r = rh - r;
+    int rcr_r = rcr - r;
+    int rcr_bw = rcr - bw;
+    int rcb_bw = rcb - bw;
+    int rcb_r = rcb - r;
 
     for (int y = 0; y < bw; y++) // top border
-        for (int x = r; x < rw_r; x++)
-            pixels[y * rw + x] = borderColor;
+        for (int x = r; x < rcr_r; x++)
+            pixels[y * canvas.w + x] = borderColor;
 
     for (int y = bw; y < r; y++) // top background
-        for (int x = r; x < rw_r; x++)
-            pixels[y * rw + x] = bgColor;
+        for (int x = r; x < rcr_r; x++)
+            pixels[y * canvas.w + x] = bgColor;
 
-    for (int y = r; y < rh_r; y++) // mid section
-        for (int x = bw; x < rw_bw; x++)
-            pixels[y * rw + x] = bgColor;
+    for (int y = r; y < rcb_r; y++) // mid section
+        for (int x = bw; x < rcr_bw; x++)
+            pixels[y * canvas.w + x] = bgColor;
 
-    for (int y = rh_r; y < rh_bw; y++) // bottom background
-        for (int x = r; x < rw_r; x++)
-            pixels[y * rw + x] = bgColor;
+    for (int y = rcb_r; y < rcb_bw; y++) // bottom background
+        for (int x = r; x < rcr_r; x++)
+            pixels[y * canvas.w + x] = bgColor;
 
-    for (int y = rh_bw; y < rh; y++) // bottom border
-        for (int x = r; x < rw_r; x++)
-            pixels[y * rw + x] = borderColor;
+    for (int y = rcb_bw; y < rcb; y++) // bottom border
+        for (int x = r; x < rcr_r; x++)
+            pixels[y * canvas.w + x] = borderColor;
 
-    for (int y = r; y < rh_r; y++) // left border
+    for (int y = r; y < rcb_r; y++) // left border
         for (int x = 0; x < bw; x++)
-            pixels[y * rw + x] = borderColor;
+            pixels[y * canvas.w + x] = borderColor;
 
-    for (int y = r; y < rh_r; y++) // right border
-        for (int x = rw_bw; x < rw; x++)
-            pixels[y * rw + x] = borderColor;
+    for (int y = r; y < rcb_r; y++) // right border
+        for (int x = rcr_bw; x < rcr; x++)
+            pixels[y * canvas.w + x] = borderColor;
 
     auto makeDist = [](int x, int y, int r) {
         float fx = float(r - x), fy = float(r - y);
@@ -89,31 +89,31 @@ void drawBorderedRect(const Canvas canvas)
     };
 
     // const float r = std::min(16, std::min(width / 2, height / 2));
-    int minrx = std::min(r, (rw + 1) / 2);
-    int minry = std::min(r, (rh + 1) / 2);
+    int minrx = std::min(r, (rcr + 1) / 2);
+    int minry = std::min(r, (rcb + 1) / 2);
 
     for (int y = 0; y < minry; y++)
         for (int x = 0; x < minrx; x++) {
             float dist = makeDist(x, y, r);
-            pixels[y * rw + x] = makeColor(dist);
+            pixels[y * rcr + x] = makeColor(dist);
         }
 
     for (int y = 0; y < minry; y++)
-        for (int x = rw - minrx; x < rw; x++) {
-            float dist = makeDist(rw - x - 1, y, r);
-            pixels[y * rw + x] = makeColor(dist);
+        for (int x = rcr - minrx; x < rcr; x++) {
+            float dist = makeDist(rcr - x - 1, y, r);
+            pixels[y * rcr + x] = makeColor(dist);
         }
 
-    for (int y = rh - minry; y < rh; y++)
+    for (int y = rcb - minry; y < rcb; y++)
         for (int x = 0; x < minrx; x++) {
-            float dist = makeDist(x, rh - y - 1, r);
-            pixels[y * rw + x] = makeColor(dist);
+            float dist = makeDist(x, rcb - y - 1, r);
+            pixels[y * rcr + x] = makeColor(dist);
         }
 
-    for (int y = rh - minry; y < rh; y++)
-        for (int x = rw - minrx; x < rw; x++) {
-            float dist = makeDist(rw - x - 1, rh - y - 1, r);
-            pixels[y * rw + x] = makeColor(dist);
+    for (int y = rcb - minry; y < rcb; y++)
+        for (int x = rcr - minrx; x < rcr; x++) {
+            float dist = makeDist(rcr - x - 1, rcb - y - 1, r);
+            pixels[y * rcr + x] = makeColor(dist);
         }
 }
 
