@@ -15,9 +15,9 @@
 HWND g_hwnd = NULL;
 #define RGBA(r, g, b, a) ((DWORD)(((b) | ((WORD)(g) << 8)) | (((DWORD)(r)) << 16) | (((DWORD)(a)) << 24)))
 
-void AlphaComposite(DWORD& back, DWORD front)
+void CompositeOverwrite(DWORD& back, DWORD front) { back = front; }
+void CompositeAlpha(DWORD& back, DWORD front)
 {
-    // Extract Alpha, Red, Green, Blue
     float fa = (front >> 24) & 0xFF, fr = (front >> 16) & 0xFF, fg = (front >> 8) & 0xFF, fb = (front) & 0xFF;
     float ba = (back >> 24) & 0xFF, br = (back >> 16) & 0xFF, bg = (back >> 8) & 0xFF, bb = (back) & 0xFF;
 
@@ -29,10 +29,8 @@ void AlphaComposite(DWORD& back, DWORD front)
         return;
 
     float inv_af = 255 - fa;
-    back = (DWORD(fa + (ba * inv_af) / 255.f) << 24)
-        | (DWORD((fr * fa + br * inv_af) / 255.f) << 16)
-        | (DWORD((fg * fa + bg * inv_af) / 255.f) << 8)
-        | DWORD((fb * fa + bb * inv_af) / 255.f);
+    back = (DWORD(fa + (ba * inv_af) / 255.f) << 24) | (DWORD((fr * fa + br * inv_af) / 255.f) << 16)
+        | (DWORD((fg * fa + bg * inv_af) / 255.f) << 8) | DWORD((fb * fa + bb * inv_af) / 255.f);
 }
 
 DWORD LerpColor(DWORD colorA, DWORD colorB, float t)
@@ -45,10 +43,8 @@ DWORD LerpColor(DWORD colorA, DWORD colorB, float t)
 
     float a1 = (colorA >> 24) & 0xff, r1 = (colorA >> 16) & 0xff, g1 = (colorA >> 8) & 0xff, b1 = (colorA) & 0xff;
     float a2 = (colorB >> 24) & 0xff, r2 = (colorB >> 16) & 0xff, g2 = (colorB >> 8) & 0xff, b2 = (colorB) & 0xff;
-    return (DWORD(a1 + t * (a2 - a1)) << 24)
-        | (DWORD(r1 + t * (r2 - r1)) << 16)
-        | (DWORD(g1 + t * (g2 - g1)) << 8)
-        | DWORD(b1 + t * (b2 - b1));
+    return (DWORD(a1 + t * (a2 - a1)) << 24) | (DWORD(r1 + t * (r2 - r1)) << 16)
+        | (DWORD(g1 + t * (g2 - g1)) << 8) | DWORD(b1 + t * (b2 - b1));
 }
 
 struct Canvas {
@@ -56,13 +52,9 @@ struct Canvas {
     LONG w, h;
 };
 
-void drawBorderedRect(const Canvas canvas, const RECT rc)
+template <void (*Composite)(DWORD& back, DWORD front) = CompositeAlpha>
+void drawBorderedRect(const Canvas canvas, const RECT rc, int r, int bw, DWORD bgCol, DWORD b_col)
 {
-    DWORD bgColor = RGBA(40, 40, 40, 160);
-    DWORD borderColor = RGBA(200, 200, 200, 160);
-    const int r = 16;
-    const int bw = 2;
-
     DWORD* pixels = canvas.pixels;
 
     const int rcl = rc.left;
@@ -80,31 +72,31 @@ void drawBorderedRect(const Canvas canvas, const RECT rc)
 
     for (int y = rct + 0; y < rct + bw; y++) // top border
         for (int x = rcl_r; x < rcw_r; x++)
-            AlphaComposite(pixels[y * canvas.w + x], borderColor);
+            Composite(pixels[y * canvas.w + x], b_col);
 
     for (int y = rct + bw; y < rct_r; y++) // top background
         for (int x = rcl_r; x < rcw_r; x++)
-            AlphaComposite(pixels[y * canvas.w + x], bgColor);
+            Composite(pixels[y * canvas.w + x], bgCol);
 
     for (int y = rct_r; y < rch_r; y++) // mid section
         for (int x = rcl + bw; x < rcw_bw; x++)
-            AlphaComposite(pixels[y * canvas.w + x], bgColor);
+            Composite(pixels[y * canvas.w + x], bgCol);
 
     for (int y = rch_r; y < rch_bw; y++) // bottom background
         for (int x = rcl_r; x < rcw_r; x++)
-            AlphaComposite(pixels[y * canvas.w + x], bgColor);
+            Composite(pixels[y * canvas.w + x], bgCol);
 
     for (int y = rch_bw; y < rct + rch; y++) // bottom border
         for (int x = rcl_r; x < rcw_r; x++)
-            AlphaComposite(pixels[y * canvas.w + x], borderColor);
+            Composite(pixels[y * canvas.w + x], b_col);
 
     for (int y = rct_r; y < rch_r; y++) // left border
         for (int x = rcl + 0; x < rcl + bw; x++)
-            AlphaComposite(pixels[y * canvas.w + x], borderColor);
+            Composite(pixels[y * canvas.w + x], b_col);
 
     for (int y = rct_r; y < rch_r; y++) // right border
         for (int x = rcw_bw; x < rcl + rcw; x++)
-            AlphaComposite(pixels[y * canvas.w + x], borderColor);
+            Composite(pixels[y * canvas.w + x], b_col);
 
     // corners
     auto makeDist = [](int x, int y, int r) {
@@ -118,7 +110,7 @@ void drawBorderedRect(const Canvas canvas, const RECT rc)
             uint8_t rgba[4];
         };
         dist += 1;
-        col = LerpColor(borderColor, bgColor, dist - bw);
+        col = LerpColor(b_col, bgCol, dist - bw);
         dist = std::clamp(dist, 0.f, 1.f);
         rgba[0] *= dist, rgba[1] *= dist, rgba[2] *= dist, rgba[3] *= dist;
         return col;
@@ -130,25 +122,25 @@ void drawBorderedRect(const Canvas canvas, const RECT rc)
     for (int y = rct + 0; y < rct + minry; y++) // top left
         for (int x = rcl; x < rcl + minrx; x++) {
             float dist = makeDist(x - rcl, y - rct, r);
-            AlphaComposite(pixels[y * canvas.w + x], makeColor(dist));
+            Composite(pixels[y * canvas.w + x], makeColor(dist));
         }
 
     for (int y = rct; y < rct + minry; y++) // top right
         for (int x = rcl + rcw - minrx; x < rcl + rcw; x++) {
             float dist = makeDist(rcw - x - 1 + rcl, y - rct, r);
-            AlphaComposite(pixels[y * canvas.w + x], makeColor(dist));
+            Composite(pixels[y * canvas.w + x], makeColor(dist));
         }
 
     for (int y = rct + rch - minry; y < rct + rch; y++)
         for (int x = rcl + 0; x < rcl + minrx; x++) {
             float dist = makeDist(x - rcl, rch - y - 1 + rct, r);
-            AlphaComposite(pixels[y * canvas.w + x], makeColor(dist));
+            Composite(pixels[y * canvas.w + x], makeColor(dist));
         }
 
     for (int y = rct + rch - minry; y < rct + rch; y++)
         for (int x = rcl + rcw - minrx; x < rcl + rcw; x++) {
             float dist = makeDist(rcw - x - 1 + rcl, rch - y - 1 + rct, r);
-            AlphaComposite(pixels[y * canvas.w + x], makeColor(dist));
+            Composite(pixels[y * canvas.w + x], makeColor(dist));
         }
 }
 
@@ -175,8 +167,8 @@ void UpdateWindow(HWND hwnd, int width, int height)
 
     Canvas canvas { (DWORD*)pvBits, width, height };
 
-    drawBorderedRect(canvas, { 0, 0, width, height });
-    drawBorderedRect(canvas, { 10, 20, width - 34, height - 32 });
+    drawBorderedRect<CompositeOverwrite>(canvas, { 0, 0, width, height }, 16, 3, 0x88333333, 0x88FFFFFF);
+    drawBorderedRect(canvas, { 8, 8, 400, height - 8 }, 8, 3, 0x88FF0000, 0xFFFF0000);
 
     BLENDFUNCTION blend = {};
     blend.BlendOp = AC_SRC_OVER;
@@ -276,6 +268,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int)
 {
+    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     WNDCLASSEX wc = {};
     wc.cbSize = sizeof(wc);
     wc.lpfnWndProc = WndProc;
