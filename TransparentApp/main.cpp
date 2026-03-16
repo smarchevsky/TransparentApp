@@ -76,78 +76,80 @@ void drawBorderedRect(const Canvas canvas, const RECT rc, int radius, int bw, DW
     const int rcl = rc.left;
     const int rcr = rc.right;
     const int rct = rc.top;
+    const int rcb = rc.bottom;
     const int rcw = rc.right - rc.left;
     const int rch = rc.bottom - rc.top;
 
-    const int minrx = std::min(radius, std::max((rcw + 1) / 2, 0));
-    const int minry = std::min(radius, std::max((rch + 1) / 2, 0));
+    const int minrx = std::min(radius, std::max(rcw / 2, 0));
+    const int minry = std::min(radius, std::max(rch / 2, 0));
+
     const int bwx = std::min(bw, minrx);
     const int bwy = std::min(bw, minry);
 
-    const int rcl_rcw_minrx_start = std::max(rcl + rcw - minrx, cl);
+    const int rcl_rcw_minrx_start = std::max(rcr - minrx, cl);
     const int rcl_minrx_end = std::min(rcl + minrx, cr);
-    const int rct_rch_minry_start = std::max(rct + rch - minry, ct);
+    const int rct_rch_minry_start = std::max(rcb - minry, ct);
 
     const int rcl_start = std::max(rcl, cl);
     const int rct_start = std::max(rct, ct);
 
-    const int rct_bw = rct + bwy;
-    const int rct_bw_start = std::max(rct_bw, ct);
-    const int rct_bw_end = std::min(rct_bw, cb);
+    const int rct_bwy = rct + bwy;
+    const int rct_bwy_start = std::max(rct_bwy, ct);
+    const int rct_bwy_end = std::min(rct_bwy, cb);
 
-    const int rcw_r = rcl + rcw - minrx;
-    const int rcw_r_end = std::min(rcw_r, cr);
+    const int rcr_minrx = rcr - minrx;
+    const int rcr_minrx_end = std::min(rcr_minrx, cr);
 
-    const int rcw_bw = rcl + rcw - bwx;
-    const int rcw_bw_start = std::max(rcw_bw, cl);
-    const int rcw_bw_end = std::min(rcw_bw, cr);
+    const int rcr_bwx = rcr - bwx;
+    const int rcr_bw_start = std::max(rcr_bwx, cl);
+    const int rcr_bw_end = std::min(rcr_bwx, cr);
 
-    const int rch_bw = rct + rch - bwy;
-    const int rch_bw_start = std::max(rch_bw, ct);
-    const int rch_bw_end = std::min(rch_bw, cb);
+    const int rcb_bwy = rcb - bwy;
+    const int rcb_bw_start = std::max(rcb_bwy, ct);
+    const int rcb_bw_end = std::min(rcb_bwy, cb);
 
-    const int rch_r = rct + rch - minry;
-    const int rch_r_start = std::max(rch_r, ct);
-    const int rch_r_end = std::min(rch_r, cb);
+    const int rcb_minry = rcb - minry;
+    const int rch_r_start = std::max(rcb_minry, ct);
+    const int rch_r_end = std::min(rcb_minry, cb);
 
-    const int rct_r = rct + minry;
-    const int rct_r_start = std::max(rct_r, ct);
-    const int rct_r_end = std::min(rct_r, cb);
+    const int rct_minry = rct + minry;
+    const int rct_minry_start = std::max(rct_minry, ct);
+    const int rct_minry_end = std::min(rct_minry, cb);
 
-    const int rcl_bw = rcl + bwx;
-    const int rcl_bw_start = std::max(rcl_bw, cl);
-    const int rcl_bw_end = std::min(rcl_bw, cr);
+    const int rcl_bwx = rcl + bwx;
+    const int rcl_bwx_start = std::max(rcl_bwx, cl);
+    const int rcl_bwx_end = std::min(rcl_bwx, cr);
 
-    const int rcl_r_start = std::max(rcl + minrx, cl);
-    const int rct_rch_end = std::min(rct + rch, cb);
-    const int rcl_rcw_end = std::min(rcl + rcw, cr);
+    const int rcl_minrx_start = std::max(rcl + minrx, cl);
+    const int rcb_end = std::min(rcb, cb);
+    const int rcr_end = std::min(rcr, cr);
 
-    for (int y = rct_start; y < rct_bw_end; y++) // top border
-        for (int x = rcl_r_start; x < rcw_r_end; x++)
+    for (int y = rct_start; y < rct_bwy_end; y++) // top border
+        for (int x = rcl_minrx_start; x < rcr_minrx_end; x++)
             Composite(pixels[y * canvas.w + x], b_col);
 
-    for (int y = rct_bw_start; y < rct_r_end; y++) // top section
-        for (int x = rcl_r_start; x < rcw_r_end; x++)
+    for (int y = rct_bwy_start; y < rct_minry_end; y++) // top section
+        for (int x = rcl_minrx_start; x < rcr_minrx_end; x++)
             Composite(pixels[y * canvas.w + x], bgCol);
 
-    for (int y = rct_r_start; y < rch_r_end; y++) // mid section
-        for (int x = rcl_bw_start; x < rcw_bw_end; x++)
+    for (int y = rct_minry_start; y < rch_r_end; y++) // mid section
+        for (int x = rcl_bwx_start; x < rcr_bw_end; x++)
             Composite(pixels[y * canvas.w + x], bgCol);
 
-    for (int y = rch_r_start; y < rch_bw_end; y++) // bottom section
-        for (int x = rcl_r_start; x < rcw_r_end; x++)
+    for (int y = rch_r_start; y < rcb_bw_end; y++) // bottom section
+        for (int x = rcl_minrx_start; x < rcr_minrx_end; x++)
             Composite(pixels[y * canvas.w + x], bgCol);
 
-    for (int y = rch_bw_start; y < rct_rch_end; y++) // bottom border
-        for (int x = rcl_r_start; x < rcw_r_end; x++)
+    for (int y = rcb_bw_start; y < rcb_end; y++) // bottom border
+        for (int x = rcl_minrx_start; x < rcr_minrx_end; x++)
             Composite(pixels[y * canvas.w + x], b_col);
 
-    for (int y = rct_r_start; y < rch_r_end; y++) // left border
-        for (int x = rcl_start; x < rcl_bw_end; x++)
+    for (int y = rct_minry_start; y < rch_r_end; y++) // left border
+        for (int x = rcl_start; x < rcl_bwx_end; x++)
             Composite(pixels[y * canvas.w + x], b_col);
 
-    for (int y = rct_r_start; y < rch_r_end; y++) // right border
-        for (int x = rcw_bw_start; x < rcl_rcw_end; x++)
+    for (int y = rct_minry_start; y < rch_r_end; y++) // right border
+        for (int x = rcr_bw_start; x < rcr_end; x++)
             Composite(pixels[y * canvas.w + x], b_col);
 
     // corners
@@ -168,26 +170,26 @@ void drawBorderedRect(const Canvas canvas, const RECT rc, int radius, int bw, DW
         return col;
     };
 
-    for (int y = rct + 0; y < rct + minry; y++) // top left
+    for (int y = rct_start; y < rct_minry_end; y++) // top left
         for (int x = rcl_start; x < rcl_minrx_end; x++) {
             float dist = makeDist(x - rcl, y - rct, radius);
             Composite(pixels[y * canvas.w + x], makeColor(dist));
         }
 
-    for (int y = rct; y < rct + minry; y++) // top right
-        for (int x = rcl_rcw_minrx_start; x < rcl_rcw_end; x++) {
+    for (int y = rct_start; y < rct_minry_end; y++) // top right
+        for (int x = rcl_rcw_minrx_start; x < rcr_end; x++) {
             float dist = makeDist(rcw - x - 1 + rcl, y - rct, radius);
             Composite(pixels[y * canvas.w + x], makeColor(dist));
         }
 
-    for (int y = rct_rch_minry_start; y < rct_rch_end; y++)
+    for (int y = rct_rch_minry_start; y < rcb_end; y++)
         for (int x = rcl_start; x < rcl_minrx_end; x++) {
             float dist = makeDist(x - rcl, rch - y - 1 + rct, radius);
             Composite(pixels[y * canvas.w + x], makeColor(dist));
         }
 
-    for (int y = rct_rch_minry_start; y < rct_rch_end; y++)
-        for (int x = rcl_rcw_minrx_start; x < rcl_rcw_end; x++) {
+    for (int y = rct_rch_minry_start; y < rcb_end; y++)
+        for (int x = rcl_rcw_minrx_start; x < rcr_end; x++) {
             float dist = makeDist(rcw - x - 1 + rcl, rch - y - 1 + rct, radius);
             Composite(pixels[y * canvas.w + x], makeColor(dist));
         }
@@ -217,7 +219,7 @@ void UpdateWindow(HWND hwnd, int width, int height)
     Canvas canvas { (DWORD*)pvBits, width, height };
 
     drawBorderedRect<CompositeOverwrite>(canvas, { 0, 0, width, height }, 16, 3, 0x88333333, 0x88FFFFFF);
-    drawBorderedRect(canvas & RECT { 0, 0, 140, 140 }, { 100, 100, width - 100, height - 100 }, 8, 3, 0x88FF0000, 0xFFFF0000);
+    drawBorderedRect(canvas & RECT { 0, 0, 140, 140 }, { 100, 100, width - 100, height - 100 }, 8, 3, 0x44FF0000, 0x88FF0000);
 
     BLENDFUNCTION blend = {};
     blend.BlendOp = AC_SRC_OVER;
