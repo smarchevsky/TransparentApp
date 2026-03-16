@@ -16,7 +16,15 @@
 HWND g_hwnd = NULL;
 #define RGBA(r, g, b, a) ((DWORD)(((b) | ((WORD)(g) << 8)) | (((DWORD)(r)) << 16) | (((DWORD)(a)) << 24)))
 
-void CompositeOverwrite(DWORD& back, DWORD front) { back = front; }
+void CompositeOverwrite(DWORD& back, DWORD front)
+{
+    back = front;
+    float ba = (back >> 24) & 0xFF, br = (back >> 16) & 0xFF, bg = (back >> 8) & 0xFF, bb = (back) & 0xFF;
+    constexpr float divier = 255.f;
+    br *= ba / divier, bg *= ba / divier, bb *= ba / divier;
+    back = (DWORD(ba) << 24) | (DWORD(br) << 16) | (DWORD(bg) << 8) | DWORD(bb);
+}
+
 void CompositeAlpha(DWORD& back, DWORD front)
 {
     float fa = (front >> 24) & 0xFF, fr = (front >> 16) & 0xFF, fg = (front >> 8) & 0xFF, fb = (front) & 0xFF;
@@ -29,9 +37,10 @@ void CompositeAlpha(DWORD& back, DWORD front)
     if (fa == 0)
         return;
 
-    float inv_af = 255 - fa;
-    back = (DWORD(fa + (ba * inv_af) / 255.f) << 24) | (DWORD((fr * fa + br * inv_af) / 255.f) << 16)
-        | (DWORD((fg * fa + bg * inv_af) / 255.f) << 8) | DWORD((fb * fa + bb * inv_af) / 255.f);
+    constexpr float divier = 255.f;
+    float inv_af = divier - fa;
+    back = (DWORD(fa + (ba * inv_af) / divier) << 24) | (DWORD((fr * fa + br * inv_af) / divier) << 16)
+        | (DWORD((fg * fa + bg * inv_af) / divier) << 8) | DWORD((fb * fa + bb * inv_af) / divier);
 }
 
 DWORD LerpColor(DWORD colorA, DWORD colorB, float t)
@@ -220,8 +229,8 @@ void UpdateWindow(HWND hwnd, int width, int height)
 
     Canvas canvas { (DWORD*)pvBits, width, height };
 
-    drawBorderedRect<CompositeOverwrite>(canvas, { 0, 0, width, height }, 16, 3, 0x88333333, 0x88FFFFFF);
-    drawBorderedRect(canvas & RECT { 0, 0, 140, 140 }, { 100, 100, width - 100, height - 100 }, 16, 8, 0x66FF0000, 0x88FF0000);
+    drawBorderedRect<CompositeOverwrite>(canvas, { 0, 0, width, height }, 16, 3, 0x88333333, 0x88333333);
+    drawBorderedRect(canvas & RECT { 0, 0, 140, 140 }, { 100, 100, width - 100, height - 100 }, 16, 8, 0x88333333, 0x88333333);
 
     BLENDFUNCTION blend = {};
     blend.BlendOp = AC_SRC_OVER;
