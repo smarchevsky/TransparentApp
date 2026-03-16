@@ -44,7 +44,7 @@ void CompositeOverwrite(DWORD& back, DWORD front)
 void CompositeAlpha(DWORD& back, DWORD front)
 {
     ARGBf(f, front);
-    ARGBf(b, front);
+    ARGBf(b, back);
 
     if (fa == 255) {
         back = front;
@@ -53,12 +53,12 @@ void CompositeAlpha(DWORD& back, DWORD front)
     if (fa == 0)
         return;
 
-    float inv_af = 255 - fa;
-    constexpr float divier = 1.f / 255;
-    back = ARGB(fa + (ba * inv_af) * divier,
-        (fr * fa + br * inv_af) * divier,
-        (fg * fa + bg * inv_af) * divier,
-        (fb * fa + bb * inv_af) * divier);
+    BYTE inv_af = 255 - fa;
+    back = ARGB(
+        fa + (ba * inv_af) / 255,
+        (fr * fa + br * inv_af) / 255,
+        (fg * fa + bg * inv_af) / 255,
+        (fb * fa + bb * inv_af) / 255);
 }
 
 DWORD LerpColor(DWORD colorA, DWORD colorB, float t)
