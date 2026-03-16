@@ -19,7 +19,7 @@ HWND g_hwnd = NULL;
 void CompositeOverwrite(DWORD& back, DWORD front)
 {
     back = front;
-    float ba = (back >> 24) & 0xFF, br = (back >> 16) & 0xFF, bg = (back >> 8) & 0xFF, bb = (back) & 0xFF;
+    float ba = float((back >> 24) & 0xFF), br = float((back >> 16) & 0xFF), bg = float((back >> 8) & 0xFF), bb = float((back) & 0xFF);
     constexpr float divier = 255.f;
     br *= ba / divier, bg *= ba / divier, bb *= ba / divier;
     back = (DWORD(ba) << 24) | (DWORD(br) << 16) | (DWORD(bg) << 8) | DWORD(bb);
@@ -27,8 +27,8 @@ void CompositeOverwrite(DWORD& back, DWORD front)
 
 void CompositeAlpha(DWORD& back, DWORD front)
 {
-    float fa = (front >> 24) & 0xFF, fr = (front >> 16) & 0xFF, fg = (front >> 8) & 0xFF, fb = (front) & 0xFF;
-    float ba = (back >> 24) & 0xFF, br = (back >> 16) & 0xFF, bg = (back >> 8) & 0xFF, bb = (back) & 0xFF;
+    float fa = float((front >> 24) & 0xFF), fr = float((front >> 16) & 0xFF), fg = float((front >> 8) & 0xFF), fb = float((front) & 0xFF);
+    float ba = float((back >> 24) & 0xFF), br = float((back >> 16) & 0xFF), bg = float((back >> 8) & 0xFF), bb = float((back) & 0xFF);
 
     if (fa == 255) {
         back = front;
@@ -37,10 +37,10 @@ void CompositeAlpha(DWORD& back, DWORD front)
     if (fa == 0)
         return;
 
-    constexpr float divier = 255.f;
-    float inv_af = divier - fa;
-    back = (DWORD(fa + (ba * inv_af) / divier) << 24) | (DWORD((fr * fa + br * inv_af) / divier) << 16)
-        | (DWORD((fg * fa + bg * inv_af) / divier) << 8) | DWORD((fb * fa + bb * inv_af) / divier);
+    float inv_af = 255 - fa;
+    constexpr float divier = 1.f / 255;
+    back = (DWORD(fa + (ba * inv_af) * divier) << 24) | (DWORD((fr * fa + br * inv_af) * divier) << 16)
+        | (DWORD((fg * fa + bg * inv_af) * divier) << 8) | DWORD((fb * fa + bb * inv_af) * divier);
 }
 
 DWORD LerpColor(DWORD colorA, DWORD colorB, float t)
@@ -51,8 +51,8 @@ DWORD LerpColor(DWORD colorA, DWORD colorB, float t)
     if (t == 1)
         return colorB;
 
-    float a1 = (colorA >> 24) & 0xff, r1 = (colorA >> 16) & 0xff, g1 = (colorA >> 8) & 0xff, b1 = (colorA) & 0xff;
-    float a2 = (colorB >> 24) & 0xff, r2 = (colorB >> 16) & 0xff, g2 = (colorB >> 8) & 0xff, b2 = (colorB) & 0xff;
+    float a1 = float((colorA >> 24) & 0xff), r1 = float((colorA >> 16) & 0xff), g1 = float((colorA >> 8) & 0xff), b1 = float((colorA) & 0xff);
+    float a2 = float((colorB >> 24) & 0xff), r2 = float((colorB >> 16) & 0xff), g2 = float((colorB >> 8) & 0xff), b2 = float((colorB) & 0xff);
     return (DWORD(a1 + t * (a2 - a1)) << 24) | (DWORD(r1 + t * (r2 - r1)) << 16)
         | (DWORD(g1 + t * (g2 - g1)) << 8) | DWORD(b1 + t * (b2 - b1));
 }
@@ -177,7 +177,10 @@ void drawBorderedRect(const Canvas canvas, const RECT rc, int radius, int bw, DW
         dist += 1;
         col = LerpColor(b_col, bgCol, dist - bw);
         dist = std::clamp(dist, 0.f, 1.f);
-        rgba[0] *= dist, rgba[1] *= dist, rgba[2] *= dist, rgba[3] *= dist;
+        rgba[0] = uint8_t(float(rgba[0]) * dist),
+        rgba[1] = uint8_t(float(rgba[1]) * dist),
+        rgba[2] = uint8_t(float(rgba[2]) * dist),
+        rgba[3] = uint8_t(float(rgba[3]) * dist);
         return col;
     };
 
