@@ -229,8 +229,10 @@ void UpdateWindow(HWND hwnd, int width, int height)
 
     Canvas canvas { (DWORD*)pvBits, width, height };
 
-    drawBorderedRect<CompositeOverwrite>(canvas, { 0, 0, width, height }, 16, 3, 0x88333333, 0x88333333);
-    drawBorderedRect(canvas & RECT { 0, 0, 140, 140 }, { 100, 100, width - 100, height - 100 }, 16, 8, 0x88333333, 0x88333333);
+    drawBorderedRect<CompositeOverwrite>(canvas, { 0, 0, width, height }, 16, 3, 0x88333333, 0x88AAAAAA);
+    drawBorderedRect(canvas, { 8, 8, 100, height - 8 }, 8, 3, 0xAA6699BB, 0xFF6699BB);
+    drawBorderedRect(canvas, { 108, 8, 200, height - 8 }, 8, 3, 0xAABB0044, 0xFFBB0044);
+    drawBorderedRect(canvas, { 208, 8, 300, height - 8 }, 8, 3, 0xAAAAAAAA, 0xFFAAAAAA);
 
     BLENDFUNCTION blend = {};
     blend.BlendOp = AC_SRC_OVER;
