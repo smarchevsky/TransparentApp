@@ -14,21 +14,24 @@
 // Alpha = 0 (transparent) for background, 255 (opaque) for drawn items
 
 HWND g_hwnd = NULL;
-#define RGBA(r, g, b, a) ((DWORD)(((b) | ((WORD)(g) << 8)) | (((DWORD)(r)) << 16) | (((DWORD)(a)) << 24)))
+#define RGBA(r, g, b, a) DWORD(((b) | (DWORD(g) << 8)) | ((DWORD(r)) << 16) | ((DWORD(a)) << 24))
+
+#define ARGB(a, r, g, b) ((DWORD(a) << 24) | (DWORD(r) << 16) | (DWORD(g) << 8) | DWORD(b))
+#define ARGBf(name, dval) float name##a = float((dval >> 24) & 0xFF), name##r = float((dval >> 16) & 0xFF), name##g = float((dval >> 8) & 0xFF), name##b = float((dval) & 0xFF);
 
 void CompositeOverwrite(DWORD& back, DWORD front)
 {
     back = front;
-    float ba = float((back >> 24) & 0xFF), br = float((back >> 16) & 0xFF), bg = float((back >> 8) & 0xFF), bb = float((back) & 0xFF);
+    ARGBf(b, front);
     constexpr float divier = 255.f;
     br *= ba / divier, bg *= ba / divier, bb *= ba / divier;
-    back = (DWORD(ba) << 24) | (DWORD(br) << 16) | (DWORD(bg) << 8) | DWORD(bb);
+    back = ARGB(ba, br, bg, bb);
 }
 
 void CompositeAlpha(DWORD& back, DWORD front)
 {
-    float fa = float((front >> 24) & 0xFF), fr = float((front >> 16) & 0xFF), fg = float((front >> 8) & 0xFF), fb = float((front) & 0xFF);
-    float ba = float((back >> 24) & 0xFF), br = float((back >> 16) & 0xFF), bg = float((back >> 8) & 0xFF), bb = float((back) & 0xFF);
+    ARGBf(f, front);
+    ARGBf(b, front);
 
     if (fa == 255) {
         back = front;
@@ -39,8 +42,10 @@ void CompositeAlpha(DWORD& back, DWORD front)
 
     float inv_af = 255 - fa;
     constexpr float divier = 1.f / 255;
-    back = (DWORD(fa + (ba * inv_af) * divier) << 24) | (DWORD((fr * fa + br * inv_af) * divier) << 16)
-        | (DWORD((fg * fa + bg * inv_af) * divier) << 8) | DWORD((fb * fa + bb * inv_af) * divier);
+    back = ARGB(fa + (ba * inv_af) * divier,
+        (fr * fa + br * inv_af) * divier,
+        (fg * fa + bg * inv_af) * divier,
+        (fb * fa + bb * inv_af) * divier);
 }
 
 DWORD LerpColor(DWORD colorA, DWORD colorB, float t)
@@ -51,10 +56,9 @@ DWORD LerpColor(DWORD colorA, DWORD colorB, float t)
     if (t == 1)
         return colorB;
 
-    float a1 = float((colorA >> 24) & 0xff), r1 = float((colorA >> 16) & 0xff), g1 = float((colorA >> 8) & 0xff), b1 = float((colorA) & 0xff);
-    float a2 = float((colorB >> 24) & 0xff), r2 = float((colorB >> 16) & 0xff), g2 = float((colorB >> 8) & 0xff), b2 = float((colorB) & 0xff);
-    return (DWORD(a1 + t * (a2 - a1)) << 24) | (DWORD(r1 + t * (r2 - r1)) << 16)
-        | (DWORD(g1 + t * (g2 - g1)) << 8) | DWORD(b1 + t * (b2 - b1));
+    ARGBf(a, colorA);
+    ARGBf(b, colorB);
+    return ARGB(aa + t * (ba - aa), ar + t * (br - ar), ag + t * (bg - ag), ab + t * (bb - ab));
 }
 
 struct Canvas {
