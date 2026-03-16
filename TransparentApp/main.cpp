@@ -32,46 +32,40 @@ HWND g_hwnd = NULL;
 #define ARGB(a, r, g, b) ((DWORD(a) << 24) | (DWORD(r) << 16) | (DWORD(g) << 8) | DWORD(b))
 #define ARGBf(name, dval) float name##a = float((dval >> 24) & 0xFF), name##r = float((dval >> 16) & 0xFF), name##g = float((dval >> 8) & 0xFF), name##b = float((dval) & 0xFF);
 
-void CompositeOverwrite(DWORD& back, DWORD front)
-{
-    back = front;
-    ARGBf(b, front);
-    constexpr float divier = 255.f;
-    br *= ba / divier, bg *= ba / divier, bb *= ba / divier;
-    back = ARGB(ba, br, bg, bb);
-}
+// inline void CompositeOverwrite(DWORD& back, float fa, float fr, float fg, float fb)
+// {
+//     back = ARGB(fa, fr * fa / 255.f, fg * fa / 255.f, fb * fa / 255.f);
+// }
 
-void CompositeAlpha(DWORD& back, DWORD front)
+// inline void CompositeOverwrite(DWORD& back, DWORD front)
+// {
+//     ARGBf(f, back);
+//     CompositeOverwrite(back, fa, fr, fg, fb);
+// }
+
+inline void CompositeAlpha(DWORD& back, float fa, float fr, float fg, float fb)
 {
-    ARGBf(f, front);
     ARGBf(b, back);
 
     if (fa == 255) {
-        back = front;
+        back = ARGB(fa, fr, fg, fb);
         return;
     }
     if (fa == 0)
         return;
 
-    BYTE inv_af = 255 - fa;
+    float inv_af = 255.f - fa;
     back = ARGB(
-        fa + (ba * inv_af) / 255,
-        (fr * fa + br * inv_af) / 255,
-        (fg * fa + bg * inv_af) / 255,
-        (fb * fa + bb * inv_af) / 255);
+        fa + (ba * inv_af) / 255.f,
+        (fr * fa + br * inv_af) / 255.f,
+        (fg * fa + bg * inv_af) / 255.f,
+        (fb * fa + bb * inv_af) / 255.f);
 }
 
-DWORD LerpColor(DWORD colorA, DWORD colorB, float t)
+inline void CompositeAlpha(DWORD& back, DWORD front)
 {
-    t = (t < 0.0f) ? 0.0f : (t > 1.0f ? 1.0f : t);
-    if (t == 0)
-        return colorA;
-    if (t == 1)
-        return colorB;
-
-    ARGBf(a, colorA);
-    ARGBf(b, colorB);
-    return ARGB(aa + t * (ba - aa), ar + t * (br - ar), ag + t * (bg - ag), ab + t * (bb - ab));
+    ARGBf(f, front);
+    CompositeAlpha(back, fa, fr, fg, fb);
 }
 
 struct Canvas {
@@ -86,8 +80,8 @@ struct Canvas {
     }
 };
 
-template <void (*Composite)(DWORD& back, DWORD front) = CompositeAlpha>
-void drawBorderedRect(const Canvas canvas, const RECT rc, int radius, int bw, DWORD bgCol, DWORD b_col)
+// template <void (*CompositeAlpha)(DWORD& back, DWORD front) = CompositeAlpha>
+void drawBorderedRect(const Canvas canvas, const RECT rc, int radius, int bw, DWORD bg_col, DWORD bo_col)
 {
     DWORD* pixels = canvas.pixels;
 
@@ -160,31 +154,31 @@ void drawBorderedRect(const Canvas canvas, const RECT rc, int radius, int bw, DW
 
     for (int y = rct_start; y < rct_bwy_end; y++) // top border
         for (int x = rcl_minrx_start; x < rcr_minrx_end; x++)
-            Composite(pixels[y * canvas.w + x], b_col);
+            CompositeAlpha(pixels[y * canvas.w + x], bo_col);
 
     for (int y = rct_bwy_start; y < rct_minry_end; y++) // top section
         for (int x = rcl_minrx_start; x < rcr_minrx_end; x++)
-            Composite(pixels[y * canvas.w + x], bgCol);
+            CompositeAlpha(pixels[y * canvas.w + x], bg_col);
 
     for (int y = rct_minry_start; y < rcb_minry_end; y++) // mid section
         for (int x = rcl_bwx_start; x < rcr_bw_end; x++)
-            Composite(pixels[y * canvas.w + x], bgCol);
+            CompositeAlpha(pixels[y * canvas.w + x], bg_col);
 
     for (int y = rcb_minry_start; y < rcb_bw_end; y++) // bottom section
         for (int x = rcl_minrx_start; x < rcr_minrx_end; x++)
-            Composite(pixels[y * canvas.w + x], bgCol);
+            CompositeAlpha(pixels[y * canvas.w + x], bg_col);
 
     for (int y = rcb_bw_start; y < rcb_end; y++) // bottom border
         for (int x = rcl_minrx_start; x < rcr_minrx_end; x++)
-            Composite(pixels[y * canvas.w + x], b_col);
+            CompositeAlpha(pixels[y * canvas.w + x], bo_col);
 
     for (int y = rct_minry_start; y < rcb_minry_end; y++) // left border
         for (int x = rcl_start; x < rcl_bwx_end; x++)
-            Composite(pixels[y * canvas.w + x], b_col);
+            CompositeAlpha(pixels[y * canvas.w + x], bo_col);
 
     for (int y = rct_minry_start; y < rcb_minry_end; y++) // right border
         for (int x = rcr_bw_start; x < rcr_end; x++)
-            Composite(pixels[y * canvas.w + x], b_col);
+            CompositeAlpha(pixels[y * canvas.w + x], bo_col);
 
     // corners
     auto makeDist = [](int x, int y, int r) {
@@ -192,43 +186,43 @@ void drawBorderedRect(const Canvas canvas, const RECT rc, int radius, int bw, DW
         return r - sqrtf(fx * fx + fy * fy);
     };
 
-    auto makeColor = [&](float dist) {
-        union {
-            DWORD col;
-            uint8_t rgba[4];
-        };
+    auto CompositeRadius = [&](DWORD& bkg, float dist) {
         dist += 1;
-        col = LerpColor(b_col, bgCol, dist - bw);
-        dist = std::clamp(dist, 0.f, 1.f);
-        rgba[0] = uint8_t(float(rgba[0]) * dist),
-        rgba[1] = uint8_t(float(rgba[1]) * dist),
-        rgba[2] = uint8_t(float(rgba[2]) * dist),
-        rgba[3] = uint8_t(float(rgba[3]) * dist);
-        return col;
+        float t = std::clamp(dist - bw, 0.f, 1.f);
+
+        ARGBf(a, bo_col);
+        ARGBf(b, bg_col);
+        float a = (aa + t * (ba - aa)) * std::clamp(dist, 0.f, 1.f);
+        float r = (ar + t * (br - ar));
+        float g = (ag + t * (bg - ag));
+        float b = (ab + t * (bb - ab));
+
+        CompositeAlpha(bkg, a, r, g, b);
+        return bkg;
     };
 
     for (int y = rct_start; y < rct_minry_end; y++) // top left
         for (int x = rcl_start; x < rcl_minrx_end; x++) {
             float dist = makeDist(x - rcl, y - rct, radius);
-            Composite(pixels[y * canvas.w + x], makeColor(dist));
+            CompositeRadius(pixels[y * canvas.w + x], dist);
         }
 
     for (int y = rct_start; y < rct_minry_end; y++) // top right
         for (int x = rcr_minrx_start; x < rcr_end; x++) {
             float dist = makeDist(rcw - x - 1 + rcl, y - rct, radius);
-            Composite(pixels[y * canvas.w + x], makeColor(dist));
+            CompositeRadius(pixels[y * canvas.w + x], dist);
         }
 
     for (int y = rcb_minry_start; y < rcb_end; y++) // bottom left
         for (int x = rcl_start; x < rcl_minrx_end; x++) {
             float dist = makeDist(x - rcl, rch - y - 1 + rct, radius);
-            Composite(pixels[y * canvas.w + x], makeColor(dist));
+            CompositeRadius(pixels[y * canvas.w + x], dist);
         }
 
     for (int y = rcb_minry_start; y < rcb_end; y++) // bottom right
         for (int x = rcr_minrx_start; x < rcr_end; x++) {
             float dist = makeDist(rcw - x - 1 + rcl, rch - y - 1 + rct, radius);
-            Composite(pixels[y * canvas.w + x], makeColor(dist));
+            CompositeRadius(pixels[y * canvas.w + x], dist);
         }
 }
 
@@ -255,7 +249,7 @@ void UpdateWindow(HWND hwnd, int width, int height)
 
     Canvas canvas { (DWORD*)pvBits, width, height };
 
-    drawBorderedRect<CompositeOverwrite>(canvas, { 0, 0, width, height }, borderR, 3, 0x88333333, 0x88AAAAAA);
+    drawBorderedRect(canvas, { 0, 0, width, height }, borderR, 3, 0x88333333, 0x88AAAAAA);
     drawBorderedRect(canvas, { 8, 8, 100, height - 8 }, 8, 3, 0xAA6699BB, 0xFF6699BB);
     drawBorderedRect(canvas, { 108, 8, 200, height - 8 }, 8, 3, 0xAABB0044, 0xFFBB0044);
     drawBorderedRect(canvas, { 208, 8, 300, height - 8 }, 8, 3, 0xAAAAAAAA, 0xFFAAAAAA);
