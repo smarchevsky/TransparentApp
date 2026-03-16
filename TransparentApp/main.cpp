@@ -13,6 +13,19 @@
 // Draw content to a DIB, then use UpdateLayeredWindow
 // Alpha = 0 (transparent) for background, 255 (opaque) for drawn items
 
+#include <iostream>
+void createConsole()
+{
+    AllocConsole();
+    SetConsoleTitleW(L"Console title");
+    FILE* fDummy;
+    freopen_s(&fDummy, "CONOUT$", "w", stdout);
+    freopen_s(&fDummy, "CONOUT$", "w", stderr);
+    freopen_s(&fDummy, "CONIN$", "r", stdin);
+    std::ios::sync_with_stdio();
+}
+
+constexpr int borderR = 16;
 HWND g_hwnd = NULL;
 #define RGBA(r, g, b, a) DWORD(((b) | (DWORD(g) << 8)) | ((DWORD(r)) << 16) | ((DWORD(a)) << 24))
 
@@ -240,7 +253,7 @@ void UpdateWindow(HWND hwnd, int width, int height)
 
     Canvas canvas { (DWORD*)pvBits, width, height };
 
-    drawBorderedRect<CompositeOverwrite>(canvas, { 0, 0, width, height }, 16, 3, 0x88333333, 0x88AAAAAA);
+    drawBorderedRect<CompositeOverwrite>(canvas, { 0, 0, width, height }, borderR, 3, 0x88333333, 0x88AAAAAA);
     drawBorderedRect(canvas, { 8, 8, 100, height - 8 }, 8, 3, 0xAA6699BB, 0xFF6699BB);
     drawBorderedRect(canvas, { 108, 8, 200, height - 8 }, 8, 3, 0xAABB0044, 0xFFBB0044);
     drawBorderedRect(canvas, { 208, 8, 300, height - 8 }, 8, 3, 0xAAAAAAAA, 0xFFAAAAAA);
@@ -290,24 +303,51 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         return 0; // client area = entire window, no NC insets
 
     case WM_NCHITTEST: {
-        POINT pt = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
+        POINT mouse = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
         RECT rc;
         GetWindowRect(hwnd, &rc);
         const int B = 8; // border thickness in px
 
-        bool left = pt.x < rc.left + B;
-        bool right = pt.x > rc.right - B;
-        bool top = pt.y < rc.top + B;
-        bool bottom = pt.y > rc.bottom - B;
+        bool left = mouse.x < rc.left + B;
+        bool right = mouse.x > rc.right - B;
+        bool top = mouse.y < rc.top + B;
+        bool bottom = mouse.y > rc.bottom - B;
 
-        if (top && left)
-            return HTTOPLEFT;
-        if (top && right)
-            return HTTOPRIGHT;
-        if (bottom && left)
-            return HTBOTTOMLEFT;
-        if (bottom && right)
-            return HTBOTTOMRIGHT;
+        auto makeDist = [](int x, int y, int r) {
+            float fx = float(r - x), fy = float(r - y);
+            return int(r - sqrtf(fx * fx + fy * fy));
+        };
+
+        int x = mouse.x - rc.left, y = mouse.y - rc.top;
+        int rcw = rc.right - rc.left, rch = rc.bottom - rc.top;
+
+        if (y < borderR) {
+            if (x < borderR) {
+                int dist = makeDist(x, y, borderR);
+                if (dist >= 0 && dist < B)
+                    return HTTOPLEFT;
+            }
+
+            if (x >= rcw - borderR) {
+                int dist = makeDist(rcw - x - 1, y, borderR);
+                if (dist >= 0 && dist < B)
+                    return HTTOPRIGHT;
+            }
+
+        } else if (y > rch - borderR) {
+            if (x < borderR) {
+                int dist = makeDist(x, rch - y - 1, borderR);
+                if (dist >= 0 && dist < B)
+                    return HTBOTTOMLEFT;
+            }
+
+            if (x >= rcw - borderR) {
+                int dist = makeDist(rcw - x - 1, rch - y - 1, borderR);
+                if (dist >= 0 && dist < B)
+                    return HTBOTTOMRIGHT;
+            }
+        }
+
         if (top)
             return HTTOP;
         if (bottom)
@@ -343,6 +383,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int)
 {
+    // createConsole();
+
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     WNDCLASSEX wc = {};
     wc.cbSize = sizeof(wc);
