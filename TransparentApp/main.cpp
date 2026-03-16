@@ -91,17 +91,19 @@ void drawBorderedRect(const Canvas canvas, const RECT rc, int radius, int bw, DW
 {
     DWORD* pixels = canvas.pixels;
 
-    int cl = 0, ct = 0, cr = canvas.w, cb = canvas.h;
+    RECT canvasRect { 0, 0, canvas.w, canvas.h };
     if (canvas.customRegion) {
-        cl = std::max(cl, (int)canvas.customRegion->left);
-        cr = std::min(cr, (int)canvas.customRegion->right);
-        ct = std::max(ct, (int)canvas.customRegion->top);
-        cb = std::max(cb, (int)canvas.customRegion->bottom);
-
-        RECT dest;
-        if (!IntersectRect(&dest, &*canvas.customRegion, &rc))
-            return;
+        canvasRect.left = std::max(canvasRect.left, canvas.customRegion->left);
+        canvasRect.top = std::max(canvasRect.top, canvas.customRegion->top);
+        canvasRect.right = std::min(canvasRect.right, canvas.customRegion->right);
+        canvasRect.bottom = std::max(canvasRect.bottom, canvas.customRegion->bottom);
     }
+
+    RECT dest;
+    if (!IntersectRect(&dest, &canvasRect, &rc))
+        return;
+
+    int cl = (int)canvasRect.left, ct = (int)canvasRect.top, cr = (int)canvasRect.right, cb = (int)canvasRect.bottom;
 
     const int rcl = rc.left;
     const int rcr = rc.right;
